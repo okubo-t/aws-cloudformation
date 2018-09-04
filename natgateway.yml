@@ -1,0 +1,150 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description:
+  NAT Gateway Create
+
+Metadata:
+  "AWS::CloudFormation::Interface":
+    ParameterGroups:
+      - Label:
+          default: "Project Name Prefix"
+        Parameters:
+          - PJPrefix
+
+      - Label: 
+          default: "NATGateway Configuration"
+        Parameters: 
+          - NATGatewayACreate
+          - NATGatewayCCreate
+
+    ParameterLabels: 
+      NATGatewayACreate: 
+        default: "NATGatewayACreate"
+      NATGatewayCCreate: 
+        default: "NATGatewayCCreate"
+
+# ------------------------------------------------------------#
+# Input Parameters
+# ------------------------------------------------------------# 
+Parameters:
+  PJPrefix:
+    Type: String
+
+  NATGatewayACreate: 
+    Default: true
+    Type: String
+    AllowedValues: 
+      - true
+      - false
+
+  NATGatewayCCreate:
+    Default: true
+    Type: String
+    AllowedValues:
+      - true
+      - false
+
+# ------------------------------------------------------------#
+# Conditions
+# ------------------------------------------------------------# 
+Conditions: 
+  IsCreateNATGatewayA: !Equals [ !Ref NATGatewayACreate, true ]
+  IsCreateNATGatewayAfalse: !Equals [ !Ref NATGatewayACreate, false ]
+
+  IsCreateNATGatewayC: !Equals [ !Ref NATGatewayCCreate, true ]
+  IsCreateNATGatewayCfalse: !Equals [ !Ref NATGatewayCCreate, false ]
+
+# ------------------------------------------------------------#
+#  NAT Gateway AZ:A
+# ------------------------------------------------------------#
+Resources:
+# NATGatewayA Create
+  NATGatewayA: 
+    Type: "AWS::EC2::NatGateway"
+    Condition: IsCreateNATGatewayA
+    Properties: 
+      AllocationId: !GetAtt NATGatewayAEIP.AllocationId 
+      SubnetId: { "Fn::ImportValue": !Sub "${PJPrefix}-public-subnet-a" }
+      Tags: 
+        - Key: Name
+          Value: !Sub "${PJPrefix}-natgw-a"
+
+# NATGateway For EIP Create
+  NATGatewayAEIP: 
+    Type: "AWS::EC2::EIP"
+    Condition: IsCreateNATGatewayA
+    Properties: 
+      Domain: vpc
+
+# PrivateRouteA Update
+  PrivateRouteA: 
+    Type: "AWS::EC2::Route"
+    Condition: IsCreateNATGatewayA
+    Properties: 
+      RouteTableId: { "Fn::ImportValue": !Sub "${PJPrefix}-private-route-a" }
+      DestinationCidrBlock: "0.0.0.0/0"
+      NatGatewayId: !Ref NATGatewayA
+
+# PrivateRouteC Update (NATGatewayC NO Create)
+  PrivateRouteC2: 
+    Type: "AWS::EC2::Route"
+    Condition: IsCreateNATGatewayCfalse
+    Properties: 
+      RouteTableId: { "Fn::ImportValue": !Sub "${PJPrefix}-private-route-c" }
+      DestinationCidrBlock: "0.0.0.0/0"
+      NatGatewayId: !Ref NATGatewayA
+
+# ------------------------------------------------------------#
+#  NAT Gateway AZ:C
+# ------------------------------------------------------------#
+# NATGatewayC Create
+  NATGatewayC:
+    Type: "AWS::EC2::NatGateway"
+    Condition: IsCreateNATGatewayC
+    Properties:
+      AllocationId: !GetAtt NATGatewayCEIP.AllocationId 
+      SubnetId: { "Fn::ImportValue": !Sub "${PJPrefix}-public-subnet-c" }
+      Tags:
+        - Key: Name
+          Value: !Sub "${PJPrefix}-natgw-c"
+
+# NATGateway For EIP Create
+  NATGatewayCEIP:
+    Type: "AWS::EC2::EIP"
+    Condition: IsCreateNATGatewayC
+    Properties:
+      Domain: vpc
+
+# PrivateRouteC Update
+  PrivateRouteC:
+    Type: "AWS::EC2::Route"
+    Condition: IsCreateNATGatewayC
+    Properties:
+      RouteTableId: { "Fn::ImportValue": !Sub "${PJPrefix}-private-route-c" }
+      DestinationCidrBlock: "0.0.0.0/0"
+      NatGatewayId: !Ref NATGatewayC
+
+# PrivateRouteA Update (NATGatewayA NO Create)
+  PrivateRouteA2: 
+    Type: "AWS::EC2::Route"
+    Condition: IsCreateNATGatewayAfalse
+    Properties: 
+      RouteTableId: { "Fn::ImportValue": !Sub "${PJPrefix}-private-route-a" }
+      DestinationCidrBlock: "0.0.0.0/0"
+      NatGatewayId: !Ref NATGatewayC
+
+# ------------------------------------------------------------#
+# Output Parameters
+# ------------------------------------------------------------#                
+Outputs:
+# NATGateway EIP
+  NATGatewayAEIP:
+    Condition: IsCreateNATGatewayA
+    Value: !Ref NATGatewayAEIP
+    Export:
+      Name: !Sub "${PJPrefix}-natgw-a-eip"
+
+  NATGatewayCEIP:
+    Condition: IsCreateNATGatewayC
+    Value: !Ref NATGatewayCEIP
+    Export:
+      Name: !Sub "${PJPrefix}-natgw-c-eip"

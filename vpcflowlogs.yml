@@ -1,0 +1,100 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: 
+  VPCFlowLogs Settings
+
+Metadata: 
+  "AWS::CloudFormation::Interface": 
+    ParameterGroups: 
+      - Label: 
+          default: "Project Name Prefix"
+        Parameters: 
+          - PJPrefix
+      - Label: 
+          default: "VPCFlowLogs Configuration (Destination Type is CloudWatchLogs)"
+        Parameters: 
+          - Filter
+          - RetentionInDays
+
+# ------------------------------------------------------------#
+# Input Parameters
+# ------------------------------------------------------------# 
+Parameters:
+  PJPrefix:
+    Type: String
+
+  Filter:
+    Type: String
+    Default: ALL
+    AllowedValues: [ ALL, ACCEPT, REJECT ]
+
+  RetentionInDays:
+    AllowedValues: [ 1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1827, 3653 ]
+    Type: Number
+    Default: 30
+
+Resources:
+# ------------------------------------------------------------#
+#  IAM Role for VPCFlowLogs
+# ------------------------------------------------------------# 
+  VPCFlowLogsIAMRole: 
+    Type: "AWS::IAM::Role"
+    Properties: 
+      RoleName: !Sub "${PJPrefix}-vpcflowlogs-role" 
+      AssumeRolePolicyDocument: 
+        Version: "2012-10-17"
+        Statement: 
+          - Effect: Allow
+            Principal: 
+              Service: 
+                - "vpc-flow-logs.amazonaws.com"
+            Action: 
+              - "sts:AssumeRole"
+
+      Policies:
+      - PolicyName: !Sub "${PJPrefix}-vpcflowlogs-policy"
+        PolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+          - Effect: Allow
+            Action:
+            - "logs:CreateLogGroup"
+            - "logs:CreateLogStream"
+            - "logs:PutLogEvents"
+            - "logs:DescribeLogGroups"
+            - "logs:DescribeLogStreams"
+            Resource: "*"
+
+# ------------------------------------------------------------#
+#  LogGroup
+# ------------------------------------------------------------#
+  LogGroup:
+    Type: "AWS::Logs::LogGroup"
+    Properties:
+      LogGroupName: !Sub "${PJPrefix}-vpcflowlogs-group"
+      RetentionInDays: !Ref RetentionInDays
+
+# ------------------------------------------------------------#
+#  VPCFlowLogs
+# ------------------------------------------------------------# 
+  VPCFlowLogs:
+    Type: "AWS::EC2::FlowLog"
+    Properties:
+      DeliverLogsPermissionArn: !GetAtt VPCFlowLogsIAMRole.Arn
+      LogGroupName: !Ref LogGroup
+      ResourceId: { "Fn::ImportValue": !Sub "${PJPrefix}-vpc" }
+      ResourceType: "VPC"
+      TrafficType: !Ref Filter
+
+# ------------------------------------------------------------#
+# Output Parameters
+# ------------------------------------------------------------# 
+Outputs:
+#LogGroup
+  LogGroupName:
+    Value: !Sub "${PJPrefix}-vpcflowlogs-group"
+    Export:
+      Name: !Sub "${PJPrefix}-vpcflowlogs-group-name"
+  LogGroupARN:
+    Value: !GetAtt LogGroup.Arn
+    Export:
+      Name: !Sub "${PJPrefix}-vpcflowlogs-group-arn"
