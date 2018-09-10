@@ -1,0 +1,388 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description:
+  Fargate for ECS Create
+
+Metadata:
+  "AWS::CloudFormation::Interface":
+    ParameterGroups:
+      - Label:
+          default: "Project Name Prefix"
+        Parameters:
+          - PJPrefix
+      - Label:
+          default: "InternetALB Configuration"
+        Parameters:
+          - InternetALBName
+          - TargetGroupName
+      - Label:
+          default: "Fargate for ECS Configuration"
+        Parameters:
+          - ECSClusterName
+          - ECSTaskName
+          - ECSTaskCPUUnit
+          - ECSTaskMemory
+          - ECSContainerName
+          - ECSImageName
+          - ECSServiceName
+          - ECSTaskDesiredCount
+        
+    ParameterLabels:
+      InternetALBName:
+        default: "InternetALBName"
+      TargetGroupName:
+        default: "TargetGroupName"
+      ECSClusterName:
+        default: "ECSClusterName"
+      ECSTaskName:
+        default: "ECSTaskName"
+      ECSTaskCPUUnit:
+        default: "ECSTaskCPUUnit"
+      ECSTaskMemory:
+        default: "ECSTaskMemory"
+      ECSContainerName:
+        default: "ECSContainerName"
+      ECSImageName:
+        default: "ECSImageName"
+      ECSServiceName:
+        default: "ECSServiceName"
+      ECSTaskDesiredCount:
+        default: "ECSTaskDesiredCount"
+
+# ------------------------------------------------------------#
+# Input Parameters
+# ------------------------------------------------------------# 
+Parameters:
+  PJPrefix:
+    Type: String
+
+#InternetALB
+  InternetALBName:
+    Type: String
+    Default: "alb"
+
+#TargetGroupName
+  TargetGroupName:
+    Type: String
+    Default: "tg"
+
+#ECSClusterName
+  ECSClusterName:
+    Type: String
+    Default: "cluster"
+
+#ECSTaskName
+  ECSTaskName:
+    Type: String
+    Default: "task"
+
+#ECSTaskCPUUnit
+  ECSTaskCPUUnit:
+    AllowedValues: [ 256, 512, 1024, 2048, 4096  ]
+    Type: String
+    Default: "256"
+
+#ECSTaskMemory
+  ECSTaskMemory:
+    AllowedValues: [ 256, 512, 1024, 2048, 4096  ]
+    Type: String
+    Default: "512"
+
+#ECSContainerName
+  ECSContainerName:
+    Type: String
+    Default: "container"
+
+#ECSImageName
+  ECSImageName:
+    Type: String
+    Default: "nginx"
+
+#ECSServiceName
+  ECSServiceName:
+    Type: String
+    Default: "service"
+
+#ECSTaskDesiredCount
+  ECSTaskDesiredCount:
+    Type: Number
+    Default: 1 
+
+Resources:
+# ------------------------------------------------------------#
+#  SecurityGroup for ALB
+# ------------------------------------------------------------#
+  ALBSecurityGroup:
+    Type: "AWS::EC2::SecurityGroup"
+    Properties:
+      VpcId: { "Fn::ImportValue": !Sub "${PJPrefix}-vpc" }
+      GroupName: !Sub "${PJPrefix}-alb-sg"
+#ECSContainerName
+  ECSContainerName:
+    Type: String
+    Default: "container"
+
+#ECSImageName
+  ECSImageName:
+    Type: String
+    Default: "nginx"
+
+#ECSImageName
+  ECSServiceName:
+    Type: String
+    Default: "service"
+
+#ECSTaskDesiredCount
+  ECSTaskDesiredCount:
+    Type: Number
+    Default: 1 
+
+Resources:
+# ------------------------------------------------------------#
+#  SecurityGroup for ALB
+# ------------------------------------------------------------#
+  ALBSecurityGroup:
+    Type: "AWS::EC2::SecurityGroup"
+    Properties:
+      VpcId: { "Fn::ImportValue": !Sub "${PJPrefix}-vpc" }
+      GroupName: !Sub "${PJPrefix}-alb-sg"
+      GroupDescription: "-"
+      Tags:
+        - Key: "Name"
+          Value: !Sub "${PJPrefix}-alb-sg"
+# Rule
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: "0.0.0.0/0"
+
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: "0.0.0.0/0"
+
+# ------------------------------------------------------------#
+#  SecurityGroup for ECS Service
+# ------------------------------------------------------------#
+  ECSSecurityGroup:
+    Type: "AWS::EC2::SecurityGroup"
+    Properties:
+      VpcId: { "Fn::ImportValue": !Sub "${PJPrefix}-vpc" }
+      GroupName: !Sub "${PJPrefix}-ecs-sg"
+      GroupDescription: "-"
+      Tags:
+        - Key: "Name"
+          Value: !Sub "${PJPrefix}-ecs-sg"
+
+# Rule
+  ECSSecurityGroupIngress: 
+    Type: "AWS::EC2::SecurityGroupIngress"
+    Properties: 
+      IpProtocol: tcp
+      FromPort: 80
+      ToPort: 80
+      SourceSecurityGroupId: !GetAtt [ ALBSecurityGroup, GroupId ] 
+      GroupId: !GetAtt [ ECSSecurityGroup, GroupId ]
+
+# ------------------------------------------------------------#
+#  Target Group
+# ------------------------------------------------------------#
+  TargetGroup: 
+    Type: "AWS::ElasticLoadBalancingV2::TargetGroup"
+    Properties: 
+      VpcId: { "Fn::ImportValue": !Sub "${PJPrefix}-vpc" } 
+      Name: !Sub "${PJPrefix}-${TargetGroupName}"
+      Protocol: HTTP
+      Port: 80
+      TargetType: ip
+
+# ------------------------------------------------------------#
+#  Internet ALB
+# ------------------------------------------------------------#
+  InternetALB: 
+    Type: "AWS::ElasticLoadBalancingV2::LoadBalancer"
+    Properties: 
+      Name: !Sub "${PJPrefix}-${InternetALBName}"
+      Tags: 
+        - Key: Name
+          Value: !Sub "${PJPrefix}-${InternetALBName}"
+      Scheme: "internet-facing"
+      LoadBalancerAttributes: 
+        - Key: "deletion_protection.enabled"
+          Value: false
+        - Key: "idle_timeout.timeout_seconds"
+          Value: 60
+      SecurityGroups:
+        - !Ref ALBSecurityGroup
+      Subnets: 
+        - { "Fn::ImportValue": !Sub "${PJPrefix}-public-subnet-a" }
+        - { "Fn::ImportValue": !Sub "${PJPrefix}-public-subnet-c" }
+
+  ALBListener: 
+    Type: "AWS::ElasticLoadBalancingV2::Listener"
+    Properties: 
+      DefaultActions: 
+        - TargetGroupArn: !Ref TargetGroup
+          Type: forward
+      LoadBalancerArn: !Ref InternetALB
+      Port: 80
+      Protocol: HTTP
+
+# ------------------------------------------------------------#
+# ECS Cluster
+# ------------------------------------------------------------# 
+  ECSCluster:
+    Type: "AWS::ECS::Cluster"
+    Properties:
+      ClusterName: !Sub "${PJPrefix}-${ECSClusterName}"
+
+# ------------------------------------------------------------#
+#  ECS LogGroup
+# ------------------------------------------------------------#
+  ECSLogGroup:
+    Type: "AWS::Logs::LogGroup"
+    Properties:
+      LogGroupName: !Sub "/ecs/logs/${PJPrefix}-ecs-group"
+
+# ------------------------------------------------------------#
+#  ECS TaskDefinition
+# ------------------------------------------------------------#
+  ECSTaskDefinition:
+    Type: "AWS::ECS::TaskDefinition"
+    Properties:
+      Cpu: !Ref ECSTaskCPUUnit
+      ExecutionRoleArn: !Sub "arn:aws:iam::${AWS::AccountId}:role/ecsTaskExecutionRole"
+      Family: !Sub "${PJPrefix}-${ECSTaskName}"
+      Memory: !Ref ECSTaskMemory
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+
+#ContainerDefinitions
+      ContainerDefinitions:
+        - Name: !Sub "${PJPrefix}-${ECSContainerName}"
+          Image: !Ref ECSImageName
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref ECSLogGroup
+              awslogs-region: !Ref "AWS::Region"
+              awslogs-stream-prefix: !Ref PJPrefix
+          MemoryReservation: 128
+          PortMappings:
+            - HostPort: 80
+              Protocol: tcp
+              ContainerPort: 80
+
+# ------------------------------------------------------------#
+#  ECS Service
+# ------------------------------------------------------------#
+  ECSService:
+    Type: AWS::ECS::Service
+    DependsOn: ALBListener
+    Properties:
+      Cluster: !Ref ECSCluster
+      DesiredCount: !Ref ECSTaskDesiredCount
+      LaunchType: FARGATE
+      LoadBalancers:
+        -
+          TargetGroupArn: !Ref TargetGroup
+          ContainerPort: 80
+          ContainerName: !Sub "${PJPrefix}-${ECSContainerName}"
+      NetworkConfiguration:
+       AwsvpcConfiguration:
+           AssignPublicIp: ENABLED
+           SecurityGroups:
+             - !Ref ECSSecurityGroup
+           Subnets:
+             - { "Fn::ImportValue": !Sub "${PJPrefix}-public-subnet-a" }
+             - { "Fn::ImportValue": !Sub "${PJPrefix}-public-subnet-c" }
+      ServiceName: !Sub "${PJPrefix}-${ECSServiceName}"
+      TaskDefinition: !Ref ECSTaskDefinition
+
+# ------------------------------------------------------------#
+# Output Parameters
+# ------------------------------------------------------------# 
+Outputs:
+#InternetALB
+  ALBDNSName:
+    Value: !GetAtt InternetALB.DNSName
+    Export:
+      Name: !Sub "${PJPrefix}-${InternetALBName}-dnsname"
+
+#ECSClusterName
+  ECSClusterName:
+    Value: !Sub "${PJPrefix}-${ECSClusterName}"
+    Export:
+      Name: !Sub "${PJPrefix}-${ECSClusterName}-name"
+
+#ECSClusterARN
+  ECSClusterARN:
+    Value: !GetAtt ECSCluster.Arn
+    Export:
+      Name: !Sub "${PJPrefix}-${ECSClusterName}-arn"
+
+#ECSLogGroup
+  ECSLogGroupName:
+    Value: !Sub "/ecs/logs/${PJPrefix}-ecs-group"
+    Export:
+      Name: !Sub "${PJPrefix}-ecs-group-name"
+
+  ECSLogGroupARN:
+    Value: !GetAtt ECSLogGroup.Arn
+    Export:
+      Name: !Sub "${PJPrefix}-ecs-group-arn"
+
+#ECSTaskDefinitionName
+  ECSTaskDefinitionName:
+    Value: !Sub "${PJPrefix}-${ECSTaskName}"
+    Export:
+      Name: !Sub "${PJPrefix}-${ECSTaskName}-name"
+
+#ECSTaskDefinition
+  ECSTaskDefinitionARN:
+    Value: !Ref ECSTaskDefinition
+    Export:
+      Name: !Sub "${PJPrefix}-${ECSTaskName}-arn"
+
+#ECSTaskCPUUnit
+  ECSTaskCPUUnit:
+    Value: !Ref ECSTaskCPUUnit
+    Export:
+      Name: !Sub "${PJPrefix}-${ECSTaskName}-cpuunit"
+
+#ECSTaskMemory
+  ECSTaskMemory:
+    Value: !Ref ECSTaskMemory
+    Export:
+      Name: !Sub "${PJPrefix}-${ECSTaskName}-memory"
+
+#ECSContainer
+  ECSContainerName:
+    Value: !Sub "${PJPrefix}-${ECSContainerName}"
+    Export:
+      Name: !Sub "${PJPrefix}-${ECSContainerName}-name"
+
+#ECSImage
+  ECSImageName:
+    Value: !Ref ECSImageName
+    Export:
+      Name: !Sub "${ECSImageName}-name"
+
+#ECSServiceName
+  ECSService:
+    Value: !Sub "${PJPrefix}-${ECSServiceName}"
+    Export:
+      Name: !Sub "${PJPrefix}-${ECSServiceName}-name"
+
+#ECSServiceARN
+  ECSServiceARN:
+    Value: !Ref ECSService
+    Export:
+      Name: !Sub "${PJPrefix}-${ECSServiceName}-arn"
+
+#ECSTaskDesiredCount
+  ECSTaskDesiredCount:
+    Value: !Ref ECSTaskDesiredCount
+    Export:
+      Name: !Sub "${PJPrefix}-${ECSTaskName}-count"
