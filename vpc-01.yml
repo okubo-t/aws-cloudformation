@@ -228,7 +228,7 @@ Resources:
 # ------------------------------------------------------------#                
 Outputs:
 # VPC
-  VPCID:
+  VPC:
     Value: !Ref VPC
     Export:
       Name: !Sub "${PJPrefix}-vpc"
@@ -244,20 +244,40 @@ Outputs:
     Export:
       Name: !Sub "${PJPrefix}-public-subnet-a"
 
+  PublicSubnetACIDR:
+    Value: !Ref PublicSubnetACIDR
+    Export:
+      Name: !Sub "${PJPrefix}-public-subnet-a-cidr"
+
   PublicSubnetC:
     Value: !Ref PublicSubnetC
     Export:
       Name: !Sub "${PJPrefix}-public-subnet-c"
+
+  PublicSubnetCCIDR:
+    Value: !Ref PublicSubnetCCIDR
+    Export:
+      Name: !Sub "${PJPrefix}-public-subnet-c-cidr"
 
   PrivateSubnetA:
     Value: !Ref PrivateSubnetA
     Export:
       Name: !Sub "${PJPrefix}-private-subnet-a"
     
+  PrivateSubnetACIDR:
+    Value: !Ref PrivateSubnetACIDR
+    Export:
+      Name: !Sub "${PJPrefix}-private-subnet-a-cidr"
+
   PrivateSubnetC:
     Value: !Ref PrivateSubnetC
     Export:
       Name: !Sub "${PJPrefix}-private-subnet-c"
+
+  PrivateSubnetCCIDR:
+    Value: !Ref PrivateSubnetCCIDR
+    Export:
+      Name: !Sub "${PJPrefix}-private-subnet-c-cidr"
 
 # Route
   PublicRouteTableA:
