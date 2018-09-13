@@ -1,0 +1,136 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: 
+  S3 and CloudFront for Sorry Page Create
+
+Metadata:
+  "AWS::CloudFormation::Interface":
+    ParameterGroups:
+      - Label: 
+          default: "S3 and CloudFront Configuration"
+        Parameters: 
+          - BucketName
+          - CName01
+          - CName02
+          - CFSSLCertificateId
+
+    ParameterLabels: 
+      BucketName: 
+        default: "BucketName"
+      CName01:
+        default: "CName01"
+      CName02:
+        default: "CName02"
+      CFSSLCertificateId: 
+        default: "CFSSLCertificateId"
+
+# ------------------------------------------------------------#
+# Input Parameters
+# ------------------------------------------------------------# 
+Parameters:
+  BucketName:
+    Type: String
+
+  CName01:
+    Type: String
+    Default: ""
+
+  CName02:
+    Type: String
+    Default: ""
+
+  CFSSLCertificateId:
+    Type: String
+
+Conditions:
+  IsCName01: !Not [!Equals [!Ref CName01, ""]]
+  IsCName02: !Not [!Equals [!Ref CName02, ""]]
+
+Resources:
+# ------------------------------------------------------------#
+#  S3 Bucket
+# ------------------------------------------------------------#        
+# Bucket
+  Bucket:
+    Type: "AWS::S3::Bucket"
+    Properties:
+      BucketName: !Ref BucketName
+
+  CloudFrontOriginAccessIdentity:
+    Type: "AWS::CloudFront::CloudFrontOriginAccessIdentity"
+    Properties:
+      CloudFrontOriginAccessIdentityConfig:
+        Comment: !Sub "access-identity-${Bucket}"
+
+  BucketPolicy:
+    Type: "AWS::S3::BucketPolicy"
+    Properties:
+      Bucket: !Ref Bucket
+      PolicyDocument:
+        Statement:
+        - Action: "s3:GetObject"
+          Effect: Allow
+          Resource: !Sub "arn:aws:s3:::${Bucket}/*"
+          Principal:
+            CanonicalUser: !GetAtt CloudFrontOriginAccessIdentity.S3CanonicalUserId
+
+# ------------------------------------------------------------#
+#  CloudFront
+# ------------------------------------------------------------#  
+  CloudFrontDistribution:
+    Type: "AWS::CloudFront::Distribution"
+    Properties:
+      DistributionConfig:
+        PriceClass: PriceClass_All
+        Aliases:
+        - !If [IsCName01, !Ref CName01, !Ref "AWS::NoValue"]
+        - !If [IsCName02, !Ref CName02, !Ref "AWS::NoValue"]
+        Origins:
+        - DomainName: !GetAtt Bucket.DomainName
+          Id: !Sub "S3origin-${BucketName}"
+          S3OriginConfig:
+            OriginAccessIdentity: !Sub "origin-access-identity/cloudfront/${CloudFrontOriginAccessIdentity}"
+
+        DefaultCacheBehavior:
+          TargetOriginId: !Sub "S3origin-${BucketName}"
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods:
+          - GET
+          - HEAD
+          CachedMethods:
+          - GET
+          - HEAD
+          DefaultTTL: 3600
+          MaxTTL: 86400
+          MinTTL: 60
+          Compress: true
+          ForwardedValues:
+            Cookies:
+              Forward: none
+            QueryString: false
+        ViewerCertificate:
+          SslSupportMethod: sni-only
+          MinimumProtocolVersion: TLSv1.1_2016
+          AcmCertificateArn: !Sub "arn:aws:acm:us-east-1:${AWS::AccountId}:certificate/${CFSSLCertificateId}"
+        HttpVersion: http2
+        Enabled: true
+        CustomErrorResponses:
+        - ErrorCode: 403
+          ErrorCachingMinTTL: 30
+          ResponsePagePath: /index.html
+          ResponseCode: 503
+
+# ------------------------------------------------------------#
+# Output Parameters
+# ------------------------------------------------------------#  
+Outputs:
+#BucketName
+  BucketName:
+    Value: !Ref Bucket
+
+#DistributionID
+  DistributionID:
+    Value: !Ref CloudFrontDistribution
+
+#DmainName
+  DomainName:
+    Value: !GetAtt CloudFrontDistribution.DomainName
