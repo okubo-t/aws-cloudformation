@@ -1,0 +1,60 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: 
+  VPCFlowLogs Settings (Destination Type is S3)
+
+Metadata: 
+  "AWS::CloudFormation::Interface": 
+    ParameterGroups: 
+      - Label: 
+          default: "Project Name Prefix"
+        Parameters: 
+          - PJPrefix
+      - Label: 
+          default: "VPCFlowLogs Configuration (Destination Type is S3)"
+        Parameters: 
+          - Filter
+
+# ------------------------------------------------------------#
+# Input Parameters
+# ------------------------------------------------------------# 
+Parameters:
+  PJPrefix:
+    Type: String
+
+  Filter:
+    Type: String
+    Default: ALL
+    AllowedValues: [ ALL, ACCEPT, REJECT ]
+
+Resources:
+# ------------------------------------------------------------#
+#  S3 Bucket for VPCFlowLogs
+# ------------------------------------------------------------#        
+#FlowLogsBucket
+  FlowLogsBucket:
+    Type: "AWS::S3::Bucket"
+    Properties:
+      BucketName: !Sub "${PJPrefix}-vpcflowlogs"
+
+# ------------------------------------------------------------#
+#  VPCFlowLogs
+# ------------------------------------------------------------# 
+  VPCFlowLogs:
+    Type: "AWS::EC2::FlowLog"
+    DependsOn: FlowLogsBucket
+    Properties:
+      LogDestination: !Sub "arn:aws:s3:::${FlowLogsBucket}"
+      LogDestinationType: s3
+      ResourceId: { "Fn::ImportValue": !Sub "${PJPrefix}-vpc" }
+      ResourceType: "VPC"
+      TrafficType: !Ref Filter
+
+# ------------------------------------------------------------#
+# Output Parameters
+# ------------------------------------------------------------# 
+Outputs:
+#FlowLogsBucket
+  FlowLogsBucket:
+    Value: !Ref FlowLogsBucket
+    Export:
+      Name: !Sub "${PJPrefix}-vpcflowlogs"
