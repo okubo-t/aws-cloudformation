@@ -21,7 +21,7 @@ Resources:
       MetricName: StatusCheckFailed_System
       Statistic: Minimum
       Period: 60
-      EvaluationPeriods: 5
+      EvaluationPeriods: 10
       ComparisonOperator: GreaterThanThreshold
       Threshold: 0
       AlarmActions: 
