@@ -1,0 +1,28 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description:
+  SSM Parameter Create
+
+# ------------------------------------------------------------#
+# Input Parameters
+# ------------------------------------------------------------# 
+Parameters:
+  MasterUserName:
+    Type: String
+    NoEcho: true
+    MinLength: 1
+    MaxLength: 16
+    AllowedPattern: "[a-zA-Z][a-zA-Z0-9]*"
+    ConstraintDescription: "must begin with a letter and contain only alphanumeric characters."
+
+# ------------------------------------------------------------#
+#  SSM Parameter
+# ------------------------------------------------------------#
+Resources:
+  Parameter:
+    Type: "AWS::SSM::Parameter"
+    Properties:
+      Name: "MasterUsername"
+      Type: "String"
+      Value: !Ref MasterUserName
+      Description: "MasterUsername for RDS"
+
