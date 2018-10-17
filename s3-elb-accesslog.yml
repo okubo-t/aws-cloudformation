@@ -1,0 +1,83 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description:
+  S3 Bucket for ELB AccessLog Create
+
+Metadata:
+  "AWS::CloudFormation::Interface":
+    ParameterGroups:
+      - Label: 
+          default: "S3 Bucket for ELB AccessLog Configuration"
+        Parameters: 
+          - ELBLogBucketName
+
+    ParameterLabels: 
+      ELBLogBucketName: 
+        default: "ELBLogBucketName"
+
+# ------------------------------------------------------------#
+# Input Parameters
+# ------------------------------------------------------------# 
+Parameters:
+  ELBLogBucketName:
+    Type: String
+
+# ------------------------------------------------------------#
+# ELBAccountId Mappings
+# ------------------------------------------------------------# 
+Mappings:
+  ELBAccountId:
+    us-east-1:
+      "AccountId": "127311923021"
+    us-west-2:
+      "AccountId": "797873946194"
+    us-west-1:
+      "AccountId": "027434742980"
+    eu-west-1:
+      "AccountId": "156460612806"
+    ap-southeast-1:
+      "AccountId": "114774131450"
+    ap-southeast-2:
+      "AccountId": "783225319266"
+    ap-northeast-1:
+      "AccountId": "582318560864"
+    sa-east-1:
+      "AccountId": "507241528517"
+    us-gov-west-1:
+      "AccountId": "048591011584"
+
+Resources:
+# ------------------------------------------------------------#
+#  S3
+# ------------------------------------------------------------#        
+# ELBLogBucket
+  ELBLogBucket:
+    Type: "AWS::S3::Bucket"
+    Properties:
+      BucketName: !Ref ELBLogBucketName
+
+#BucketPolicy
+  ELBLogBucketPolicy:
+    Type: "AWS::S3::BucketPolicy"
+    Properties:
+      Bucket: !Ref ELBLogBucket
+      PolicyDocument:
+        Id: "AWSCFn-AccessLogs-Policy-20180920"
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AWSCFn-20180920
+            Effect: "Allow"
+            Action:
+              - "s3:PutObject"
+            Resource: !Sub "arn:aws:s3:::${ELBLogBucket}/AWSLogs/${AWS::AccountId}/*"
+            Principal:
+              AWS: !FindInMap [ ELBAccountId, !Ref "AWS::Region", AccountId ]
+
+# ------------------------------------------------------------#                
+# Output Parameters
+# ------------------------------------------------------------#                
+Outputs:
+#ELBLogBucket
+  ELBLogBucket:
+    Value: !Ref ELBLogBucket
+    Export:
+      Name: !Ref ELBLogBucketName
