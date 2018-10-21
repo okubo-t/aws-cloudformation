@@ -1,0 +1,90 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: 
+  CloudFormation Macro Create
+
+# ------------------------------------------------------------#
+# Input Parameters
+# ------------------------------------------------------------# 
+Parameters:
+  CFnMacroName:
+    Type: String
+
+# ------------------------------------------------------------#
+#  LambdaExecutionRole
+# ------------------------------------------------------------#        
+Resources:
+  LambdaExecutionRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      RoleName: !Sub "${CFnMacroName}-LambdaExecutionRole"
+      Policies:
+        - PolicyName: !Sub "${CFnMacroName}-LambdaExecutionRole-Policy"
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - "logs:CreateLogGroup"
+                  - "logs:CreateLogStream"
+                  - "logs:PutLogEvents"
+                Resource: "arn:aws:logs:*:*:*"
+
+              - Effect: Allow
+                Action:
+                  - "ssm:PutParameter"
+                Resource: "*"
+
+      AssumeRolePolicyDocument: 
+        Version: "2012-10-17"
+        Statement: 
+          - Sid: ""
+            Effect: Allow
+            Principal: 
+              Service: "lambda.amazonaws.com"
+            Action: "sts:AssumeRole"
+
+# ------------------------------------------------------------#
+#  Lambda Function for CloudFormation Macro
+#  example : generate random string(10) and register SSM
+# ------------------------------------------------------------#  
+  LambdaFunction:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      FunctionName: !Ref CFnMacroName
+      Role: !GetAtt LambdaExecutionRole.Arn
+      Handler: index.handler
+
+      Code:
+        ZipFile: !Sub |
+          import boto3
+          import string
+          import random
+
+          ssm = boto3.client('ssm')
+
+          def handler(event, context):
+            key = event['params']['Key']
+            description = event['params']['Description']
+            randomstr = ''.join(random.choices(string.ascii_letters + string.digits, k=10))
+
+            ssm.put_parameter(
+              Name=key,
+              Value=randomstr,
+              Type='SecureString',
+              Description=description
+            )
+            return {'requestId': event['requestId'], 'status': 'success', 'fragment': randomstr}
+
+      Runtime: "python3.6"
+      MemorySize: 128
+      Timeout: 5
+
+# ------------------------------------------------------------#
+#  CloudFormation Macro
+# ------------------------------------------------------------#  
+  CFnMacro:
+    Type: "AWS::CloudFormation::Macro"
+    Properties:
+      FunctionName: !Ref LambdaFunction
+      Name: !Ref CFnMacroName
+      Description: !Ref CFnMacroName 
