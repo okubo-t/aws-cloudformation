@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: 
-  S3 and CloudFront for Static website hosting
+  S3 and CloudFront for Static website hosting (OAI Available)
 
 Metadata:
   "AWS::CloudFormation::Interface":
@@ -8,11 +8,14 @@ Metadata:
       - Label: 
           default: "S3 and CloudFront Configuration"
         Parameters: 
+          - BucketName
           - WebsiteDomainName
           - CFSSLCertificateId
 
     ParameterLabels: 
-      WebsiteDomainName: 
+      BucketName:
+        default: "BucketName"
+      WebsiteDomainName:
         default: "WebsiteDomainName"
       CFSSLCertificateId: 
         default: "CFSSLCertificateId"
@@ -21,6 +24,9 @@ Metadata:
 # Input Parameters
 # ------------------------------------------------------------# 
 Parameters:
+  BucketName:
+    Type: String
+
   WebsiteDomainName:
     Type: String
 
@@ -35,10 +41,13 @@ Resources:
   Bucket:
     Type: "AWS::S3::Bucket"
     Properties:
-      BucketName: !Ref WebsiteDomainName
-      AccessControl: PublicRead
-      WebsiteConfiguration:
-        IndexDocument: index.html
+      BucketName: !Ref BucketName
+
+  CloudFrontOriginAccessIdentity:
+    Type: "AWS::CloudFront::CloudFrontOriginAccessIdentity"
+    Properties:
+      CloudFrontOriginAccessIdentityConfig:
+        Comment: !Sub "access-identity-${Bucket}"
 
   BucketPolicy:
     Type: "AWS::S3::BucketPolicy"
@@ -49,7 +58,8 @@ Resources:
         - Action: "s3:GetObject"
           Effect: Allow
           Resource: !Sub "arn:aws:s3:::${Bucket}/*"
-          Principal: '*'
+          Principal:
+            CanonicalUser: !GetAtt CloudFrontOriginAccessIdentity.S3CanonicalUserId
 
 # ------------------------------------------------------------#
 #  CloudFront
@@ -62,12 +72,13 @@ Resources:
         Aliases:
         - !Ref WebsiteDomainName
         Origins:
-        - CustomOriginConfig:
-            OriginProtocolPolicy: http-only
-          DomainName: !Sub "${WebsiteDomainName}.s3-website-${AWS::Region}.amazonaws.com"
-          Id: !Sub "S3-Website-${WebsiteDomainName}.s3-website-ap-northeast-1.amazonaws.com"
+        - DomainName: !GetAtt Bucket.DomainName
+          Id: !Sub "S3origin-${BucketName}"
+          S3OriginConfig:
+            OriginAccessIdentity: !Sub "origin-access-identity/cloudfront/${CloudFrontOriginAccessIdentity}"
+        DefaultRootObject: index.html
         DefaultCacheBehavior:
-          TargetOriginId: !Sub "S3-Website-${WebsiteDomainName}.s3-website-ap-northeast-1.amazonaws.com"
+          TargetOriginId: !Sub "S3origin-${BucketName}"
           ViewerProtocolPolicy: redirect-to-https
           AllowedMethods:
           - GET
@@ -94,9 +105,9 @@ Resources:
 # Output Parameters
 # ------------------------------------------------------------#  
 Outputs:
-#WebsiteURL:
-  WebsiteURL:
-    Value: !GetAtt Bucket.WebsiteURL
+#BucketName
+  BucketName:
+    Value: !Ref Bucket
 
 #DistributionID
   DistributionID:
